@@ -34,7 +34,7 @@ use anything all morning.
 cheapest model. The window starts right away, while you are away, and it resets earlier.
 
 <p align="center">
-  <img src="docs/how-it-works.png" width="820" alt="Timeline: without the app the window starts at 14:00 and resets at 19:00; with the app it starts at 09:00, resets at 14:00, and a fresh window is ready">
+  <img src="docs/how-it-works.png" width="820" alt="Timeline: without the app the window starts at 14:00 and resets at 19:00; with the app it starts automatically at 09:00, resets at 14:00, and a fresh window is ready, so the limit resets 5 hours sooner">
 </p>
 
 ## What you gain

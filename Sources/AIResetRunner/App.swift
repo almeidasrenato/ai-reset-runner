@@ -35,6 +35,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         popover.contentViewController = panel
         popover.behavior = .transient
 
+        // Newer macOS opens SwiftUI's empty Settings scene on launch and reopen; keep it closed.
+        NotificationCenter.default.addObserver(forName: NSWindow.didUpdateNotification, object: nil, queue: .main) { note in
+            guard let window = note.object as? NSWindow, window.isVisible,
+                  window.identifier?.rawValue == "com_apple_SwiftUI_Settings_window" else { return }
+            window.close()
+        }
+
         statusItem.button?.target = self
         statusItem.button?.action = #selector(togglePopover)
         updateIcon()

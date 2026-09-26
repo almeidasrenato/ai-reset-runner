@@ -1,0 +1,6 @@
+You are currently using your subscription to power your Claude Code usage
+
+Current session: 7% used · resets Sep 26 at 3:10am (America/Sao_Paulo)
+Current week (all models): 17% used · resets Sep 28 at 3am (America/Sao_Paulo)
+
+What's contributing to your limits usage?

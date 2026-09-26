@@ -1,49 +1,45 @@
 import AppKit
 import SwiftUI
 
+/// Warm, system-following palette: sage accent, terracotta only for a used-up limit.
 enum Theme {
-    static let background = Color(red: 0.07, green: 0.08, blue: 0.10)
-    static let card = Color(red: 0.10, green: 0.115, blue: 0.14)
-    static let cardBorder = Color.white.opacity(0.05)
-    static let track = Color.white.opacity(0.08)
-    static let primary = Color(red: 0.91, green: 0.93, blue: 0.95)
-    static let secondary = Color(red: 0.55, green: 0.59, blue: 0.65)
-    static let accent = Color(red: 0.49, green: 0.73, blue: 1.0)
-    static let accentFill = Color(red: 0.19, green: 0.29, blue: 0.43)
-    static let warning = Color(red: 1.0, green: 0.55, blue: 0.50)
+    static let accent = Color(light: 0x4C7658, dark: 0x9BC2A1)
+    static let warning = Color(light: 0xB0503A, dark: 0xE8937C)
+    static let track = Color.primary.opacity(0.09)
+    static let groupFill = Color.primary.opacity(0.035)
+    static let hairline = Color.primary.opacity(0.08)
 
-    /// Blue everywhere; only a limit that is used up turns red.
     static func usage(_ percent: Double) -> Color { percent >= 100 ? warning : accent }
 }
 
+extension Color {
+    init(light: UInt32, dark: UInt32) {
+        func rgb(_ hex: UInt32) -> NSColor {
+            NSColor(srgbRed: CGFloat(hex >> 16 & 0xFF) / 255, green: CGFloat(hex >> 8 & 0xFF) / 255, blue: CGFloat(hex & 0xFF) / 255, alpha: 1)
+        }
+        self.init(nsColor: NSColor(name: nil) { $0.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? rgb(dark) : rgb(light) })
+    }
+}
+
 extension View {
-    /// Rounded card on the panel background.
-    func card(padding: CGFloat = 14) -> some View {
+    /// Soft grouped surface, like a System Settings section.
+    func group(padding: CGFloat = 14) -> some View {
         self.padding(padding)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Theme.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Theme.cardBorder))
+            .background(Theme.groupFill, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Theme.hairline, lineWidth: 0.5))
     }
 
     /// Shared look for the panel and the settings window.
     func appStyle() -> some View {
-        self.fontDesign(.rounded)
-            .foregroundStyle(Theme.primary)
-            .tint(Theme.accent)
-            .environment(\.colorScheme, .dark)
+        self.tint(Theme.accent)
     }
 }
 
-/// The app mark: blue disc with a reset arrow.
-struct AppMark: View {
-    var size: CGFloat = 26
-
-    var body: some View {
-        Image(systemName: "arrow.clockwise")
-            .font(.system(size: size * 0.5, weight: .bold))
-            .foregroundStyle(Theme.background)
-            .frame(width: size, height: size)
-            .background(Theme.accent, in: Circle())
+/// Native mini switch in the accent color.
+extension View {
+    func softSwitch() -> some View {
+        self.labelsHidden().toggleStyle(.switch).controlSize(.mini)
     }
 }
 
@@ -53,65 +49,58 @@ struct Panel: View {
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: store.providers.contains { $0.isPinging } ? 1 : 30)) { context in
-            VStack(spacing: 10) {
+            VStack(spacing: 8) {
                 header
                 if store.shown.isEmpty {
                     Text(L("No provider enabled. Turn on Claude or Codex in Settings.", "Nenhum provedor ativo. Ative o Claude ou o Codex em Configurações."))
-                        .font(.system(size: 12)).foregroundStyle(Theme.secondary)
-                        .card()
+                        .font(.system(size: 12)).foregroundStyle(.secondary)
+                        .group()
                 }
                 ForEach(store.shown, id: \.name) { ProviderCard(state: $0, now: context.date, onAutoChange: store.reschedule) }
                 footer
             }
-            .padding(14)
+            .padding(12)
         }
-        .frame(width: 350)
-        .background(Theme.background)
+        .frame(width: 320)
         .appStyle()
         .id(store.language)
     }
 
     private var header: some View {
-        HStack(spacing: 10) {
-            AppMark()
-            Text("AI ResetRunner").font(.system(size: 16, weight: .bold))
+        HStack(spacing: 2) {
+            Text("AI ResetRunner").font(.system(size: 13, weight: .semibold))
             Spacer()
             let loading = store.providers.contains { $0.isLoading }
             IconButton(symbol: "arrow.clockwise", help: L("Check now", "Verificar agora")) { store.refreshAll() }
                 .rotationEffect(.degrees(loading ? 360 : 0))
                 .animation(loading ? .linear(duration: 1).repeatForever(autoreverses: false) : .default, value: loading)
             IconButton(symbol: "gearshape", help: L("Settings", "Configurações"), action: openSettings)
-            .overlay(alignment: .topTrailing) {
-                if store.updater.available != nil { Circle().fill(Theme.accent).frame(width: 7, height: 7) }
-            }
+                .overlay(alignment: .topTrailing) {
+                    if store.updater.available != nil { Circle().fill(Theme.accent).frame(width: 6, height: 6).offset(x: -5, y: 5) }
+                }
         }
-        .padding(.horizontal, 2)
-        .padding(.bottom, 2)
+        .padding(.leading, 4)
     }
 
     private var footer: some View {
         HStack {
-            Button {
+            Button(L("Copy raw data", "Copiar dados brutos")) {
                 let text = store.providers.map { "## \($0.name) (\($0.reading?.source ?? "-"))\n\($0.reading?.raw ?? $0.error ?? "")" }
                     .joined(separator: "\n\n")
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(text, forType: .string)
-            } label: {
-                Label(L("Copy raw data", "Copiar dados brutos"), systemImage: "doc.on.doc")
             }
             if store.simulation {
                 Spacer()
-                Label(L("simulation", "simulação"), systemImage: "flask").foregroundStyle(Theme.accent)
+                Text(L("Simulation", "Simulação")).foregroundStyle(Theme.accent)
             }
             Spacer()
-            Button { NSApp.terminate(nil) } label: {
-                Label(L("Quit", "Sair"), systemImage: "rectangle.portrait.and.arrow.right").labelStyle(TrailingIcon())
-            }
-            .keyboardShortcut("q")
+            Button(L("Quit", "Sair")) { NSApp.terminate(nil) }
+                .keyboardShortcut("q")
         }
         .buttonStyle(.plain)
-        .font(.system(size: 12))
-        .foregroundStyle(Theme.secondary)
+        .font(.system(size: 11))
+        .foregroundStyle(.secondary)
         .padding(.horizontal, 4)
         .padding(.top, 2)
     }
@@ -125,41 +114,13 @@ struct IconButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: symbol)
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(Theme.secondary)
-                .frame(width: 28, height: 28)
+                .font(.system(size: 12, weight: .regular))
+                .foregroundStyle(.secondary)
+                .frame(width: 26, height: 26)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .help(help)
-    }
-}
-
-/// Flat blue switch. Drawn in SwiftUI (not NSSwitch) so it matches the theme.
-struct BlueSwitch: ToggleStyle {
-    @Environment(\.isEnabled) private var isEnabled
-
-    func makeBody(configuration: Configuration) -> some View {
-        HStack {
-            configuration.label
-            Capsule()
-                .fill(configuration.isOn ? Theme.accent : Theme.track)
-                .frame(width: 30, height: 17)
-                .overlay(alignment: configuration.isOn ? .trailing : .leading) {
-                    Circle().fill(.white).padding(2).shadow(radius: 1, y: 0.5)
-                }
-                .animation(.easeOut(duration: 0.15), value: configuration.isOn)
-                .contentShape(Capsule())
-                .onTapGesture { if isEnabled { configuration.isOn.toggle() } }
-                .accessibilityAddTraits(.isButton)
-        }
-        .opacity(isEnabled ? 1 : 0.4)
-    }
-}
-
-struct TrailingIcon: LabelStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        HStack(spacing: 6) { configuration.title; configuration.icon }
     }
 }
 
@@ -169,33 +130,29 @@ struct ProviderCard: View {
     let onAutoChange: () -> Void
 
     var body: some View {
-        HStack(alignment: .top, spacing: 16) {
-            UsageRing(session: state.reading?.session, now: now)
-                .frame(width: 64, height: 64)
-            VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    Text(state.name).font(.system(size: 15, weight: .semibold))
-                    Spacer()
-                    pingButton
-                }
-                LimitRow(title: L("Session · 5h", "Sessão · 5h"), window: state.reading?.session, idleText: L("no active window", "sem janela ativa"), now: now)
-                LimitRow(title: L("Weekly", "Semanal"), window: state.reading?.weekly, idleText: L("no active limit", "sem limite ativo"), now: now)
-                HStack {
-                    Text(L("Auto-start", "Auto-disparo")).font(.system(size: 12, weight: .medium))
-                    Spacer()
-                    Toggle("", isOn: Binding(get: { state.autoEnabled }, set: {
-                        state.autoEnabled = $0
-                        state.autoStatus = nil
-                        onAutoChange()
-                    }))
-                    .labelsHidden()
-                    .toggleStyle(BlueSwitch())
-                }
-                .help(L("Starts a window by itself when none is active (at most once every 4h50)", "Dispara sozinho quando não houver janela de 5h ativa (no máximo 1 vez a cada 4h50)"))
-                status
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text(state.name).font(.system(size: 14, weight: .semibold))
+                Spacer()
+                pingButton
             }
+            LimitRow(title: L("Session · 5h", "Sessão · 5h"), window: state.reading?.session, idleText: L("No active window", "Sem janela ativa"), now: now)
+            LimitRow(title: L("Weekly", "Semanal"), window: state.reading?.weekly, idleText: L("No active limit", "Sem limite ativo"), now: now)
+            Rectangle().fill(Theme.hairline).frame(height: 0.5)
+            HStack {
+                Text(L("Auto-start", "Auto-disparo")).font(.system(size: 12))
+                Spacer()
+                Toggle("", isOn: Binding(get: { state.autoEnabled }, set: {
+                    state.autoEnabled = $0
+                    state.autoStatus = nil
+                    onAutoChange()
+                }))
+                .softSwitch()
+            }
+            .help(L("Starts a window by itself when none is active (at most once every 4h50)", "Dispara sozinho quando não houver janela de 5h ativa (no máximo 1 vez a cada 4h50)"))
+            status
         }
-        .card()
+        .group()
     }
 
     private var pingLabel: String {
@@ -207,17 +164,13 @@ struct ProviderCard: View {
     private var pingButton: some View {
         Button { Task { await state.ping() } } label: {
             HStack(spacing: 5) {
-                if state.isPinging {
-                    ProgressView().controlSize(.mini).tint(.white)
-                } else {
-                    Image(systemName: "play.fill").font(.system(size: 9))
-                }
+                if state.isPinging { ProgressView().controlSize(.mini) }
                 Text(pingLabel).monospacedDigit()
             }
-            .font(.system(size: 12, weight: .semibold))
-            .foregroundStyle(.white)
-            .padding(.horizontal, 11).padding(.vertical, 5)
-            .background(Theme.accentFill, in: Capsule())
+            .font(.system(size: 11, weight: .medium))
+            .foregroundStyle(Theme.accent)
+            .padding(.horizontal, 10).padding(.vertical, 4)
+            .background(Theme.accent.opacity(0.13), in: Capsule())
         }
         .buttonStyle(.plain)
         .disabled(state.isPinging)
@@ -225,21 +178,24 @@ struct ProviderCard: View {
     }
 
     @ViewBuilder private var status: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            if let error = state.error {
-                Label(error, systemImage: "exclamationmark.circle").foregroundStyle(Theme.warning)
+        let lines = [
+            state.autoEnabled ? L("Auto: \(state.autoStatus ?? L("waiting for a reading", "aguardando leitura"))", "Auto: \(state.autoStatus ?? "aguardando leitura")") : nil,
+            state.lastPing.map { ping in
+                L("Last start \(ping.at.formatted(date: .omitted, time: .shortened)) · \(ping.detail)", "Último disparo \(ping.at.formatted(date: .omitted, time: .shortened)) · \(ping.detail)")
+            },
+        ].compactMap { $0 }
+        if state.error != nil || !lines.isEmpty {
+            VStack(alignment: .leading, spacing: 3) {
+                if let error = state.error {
+                    Label(error, systemImage: "exclamationmark.circle").foregroundStyle(Theme.warning)
+                }
+                ForEach(lines, id: \.self) { Text($0) }
             }
-            if state.autoEnabled {
-                Label(L("Auto: \(state.autoStatus ?? L("waiting for a reading", "aguardando leitura"))", "Auto: \(state.autoStatus ?? "aguardando leitura")"), systemImage: "wand.and.stars")
-            }
-            if let ping = state.lastPing {
-                Label(L("Last start \(ping.at.formatted(date: .omitted, time: .shortened)) · \(ping.detail)", "Último disparo \(ping.at.formatted(date: .omitted, time: .shortened)) · \(ping.detail)"),
-                      systemImage: ping.ok ? "clock" : "xmark.circle")
-            }
+            .font(.system(size: 11))
+            .foregroundStyle(.secondary)
+            .lineLimit(2)
+            .padding(.top, -4)
         }
-        .font(.system(size: 11))
-        .foregroundStyle(Theme.secondary)
-        .lineLimit(2)
     }
 }
 
@@ -252,47 +208,27 @@ struct LimitRow: View {
     var body: some View {
         let active = window.map { !$0.isIdle(now: now) } ?? false
         let percent = window?.usedPercent ?? 0
-        VStack(alignment: .leading, spacing: 5) {
+        VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline) {
-                Text(title).foregroundStyle(Theme.secondary)
+                Text(title)
+                Text(active ? L("resets in \(duration(window!.resetsAt!.timeIntervalSince(now)))", "reseta em \(duration(window!.resetsAt!.timeIntervalSince(now)))") : idleText)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
                 Spacer()
                 Text(window == nil ? "—" : "\(Int(percent.rounded()))%")
-                    .font(.system(size: 12, weight: .semibold).monospacedDigit())
-                    .foregroundStyle(active ? Theme.usage(percent) : Theme.secondary)
+                    .font(.system(size: 12, weight: .medium).monospacedDigit())
+                    .foregroundStyle(percent >= 100 ? AnyShapeStyle(Theme.warning) : active ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
             }
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
                     Capsule().fill(Theme.track)
-                    Capsule().fill(Theme.usage(percent)).frame(width: geo.size.width * min(percent / 100, 1))
+                    Capsule().fill(Theme.usage(percent).opacity(active ? 1 : 0.45))
+                        .frame(width: geo.size.width * min(percent / 100, 1))
                 }
             }
-            .frame(height: 5)
-            Text(active ? L("resets in \(duration(window!.resetsAt!.timeIntervalSince(now)))", "reseta em \(duration(window!.resetsAt!.timeIntervalSince(now)))") : idleText)
-                .font(.system(size: 11))
-                .foregroundStyle(Theme.secondary)
+            .frame(height: 4)
+            .animation(.easeOut(duration: 0.4), value: percent)
         }
         .font(.system(size: 12))
-    }
-}
-
-/// 5h session usage. Dashed ring = no active window.
-struct UsageRing: View {
-    let session: LimitWindow?
-    let now: Date
-
-    var body: some View {
-        let active = session.map { !$0.isIdle(now: now) } ?? false
-        let percent = session?.usedPercent ?? 0
-        ZStack {
-            Circle().stroke(Theme.track, style: StrokeStyle(lineWidth: 6, dash: active ? [] : [3, 5]))
-            if active {
-                Circle().trim(from: 0, to: max(percent / 100, 0.005))
-                    .stroke(Theme.usage(percent), style: StrokeStyle(lineWidth: 6, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
-            }
-            Text(active ? "\(Int(percent.rounded()))%" : "—")
-                .font(.system(size: 15, weight: .bold).monospacedDigit())
-        }
-        .padding(3)
     }
 }

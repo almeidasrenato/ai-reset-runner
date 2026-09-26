@@ -8,33 +8,24 @@ struct SettingsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 12) {
-                AppMark(size: 34)
+                Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 40, height: 40)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(L("Settings", "Configurações")).font(.system(size: 18, weight: .bold))
-                    Text(L("AI ResetRunner · version \(version)", "AI ResetRunner · versão \(version)")).font(.system(size: 11)).foregroundStyle(Theme.secondary)
+                    Text(L("Settings", "Configurações")).font(.system(size: 17, weight: .semibold))
+                    Text(L("AI ResetRunner · version \(version)", "AI ResetRunner · versão \(version)")).font(.system(size: 11)).foregroundStyle(.secondary)
                 }
             }
-            .padding(.bottom, 4)
+            .padding(.bottom, 6)
 
-            section(L("General", "Geral"), "slider.horizontal.3") {
+            section(L("General", "Geral")) {
                 HStack {
                     Text(L("Language", "Idioma"))
                     Spacer()
-                    HStack(spacing: 2) {
-                        ForEach(Language.allCases, id: \.self) { lang in
-                            let selected = store.language == lang
-                            Button { store.language = lang } label: {
-                                Text(lang == .en ? "English" : "Português")
-                                    .font(.system(size: 12, weight: .medium))
-                                    .foregroundStyle(selected ? .white : Theme.secondary)
-                                    .padding(.horizontal, 10).padding(.vertical, 4)
-                                    .background(selected ? Theme.accentFill : .clear, in: Capsule())
-                            }
-                            .buttonStyle(.plain)
-                        }
+                    Picker("", selection: Binding(get: { store.language }, set: { store.language = $0 })) {
+                        ForEach(Language.allCases, id: \.self) { Text($0 == .en ? "English" : "Português").tag($0) }
                     }
-                    .padding(2)
-                    .background(Theme.track, in: Capsule())
+                    .labelsHidden()
+                    .pickerStyle(.segmented)
+                    .fixedSize()
                 }
                 divider
                 row(L("Open at login", "Abrir ao iniciar o Mac"), get: { store.launchAtLogin }, set: store.setLaunchAtLogin)
@@ -48,7 +39,7 @@ struct SettingsView: View {
                 })
             }
 
-            section(L("Providers", "Provedores"), "square.stack.3d.up") {
+            section(L("Providers", "Provedores")) {
                 ForEach(Array(store.providers.enumerated()), id: \.element.name) { index, state in
                     if index > 0 { divider }
                     HStack(spacing: 14) {
@@ -63,24 +54,25 @@ struct SettingsView: View {
                     }
                 }
                 Text(L("Disabled: no reading, no starts. Hidden: keeps working, just not shown in the panel.", "Desativado não lê o uso nem dispara. Oculto continua funcionando, só não aparece no painel."))
-                    .font(.system(size: 11)).foregroundStyle(Theme.secondary)
+                    .font(.system(size: 11)).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            section(L("Notifications", "Notificações"), "bell") {
+            section(L("Notifications", "Notificações")) {
                 ForEach(Array(NotificationKind.allCases.enumerated()), id: \.element) { index, kind in
                     if index > 0 { divider }
                     row(kind.label, get: { store.notificationKinds.contains(kind) }, set: {
                         if $0 { store.notificationKinds.insert(kind) } else { store.notificationKinds.remove(kind) }
                     })
                 }
-                pill(L("macOS notification settings", "Ajustes de notificação do macOS"), "arrow.up.forward.app") {
+                divider
+                link(L("Open macOS notification settings", "Abrir ajustes de notificação do macOS")) {
                     let id = Bundle.main.bundleIdentifier ?? ""
                     NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension?id=\(id)")!)
                 }
             }
 
-            section(L("Updates", "Atualizações"), "arrow.down.circle") {
+            section(L("Updates", "Atualizações")) {
                 let updater = store.updater
                 row(L("Check for new versions", "Procurar novas versões"), detail: L("Once a day, on GitHub", "Uma vez por dia, no GitHub"), get: { updater.autoCheck }, set: { updater.autoCheck = $0 })
                 divider
@@ -88,24 +80,26 @@ struct SettingsView: View {
                     .disabled(!updater.autoCheck)
                 HStack {
                     Text(updater.status ?? L("Version \(version)", "Versão \(version)"))
-                        .font(.system(size: 11)).foregroundStyle(Theme.secondary).lineLimit(2)
+                        .font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(2)
                     Spacer()
                     if updater.isBusy {
                         ProgressView().controlSize(.small)
                     } else if let available = updater.available {
-                        pill(L("Install \(available.version)", "Instalar \(available.version)"), "arrow.down.to.line", filled: true) { Task { await updater.install() } }
+                        Button(L("Install \(available.version)", "Instalar \(available.version)")) { Task { await updater.install() } }
+                            .buttonStyle(.borderedProminent).controlSize(.small)
                     } else {
-                        pill(L("Check now", "Verificar agora"), "arrow.clockwise") { Task { await updater.check() } }
+                        Button(L("Check now", "Verificar agora")) { Task { await updater.check() } }
+                            .controlSize(.small)
                     }
                 }
                 .padding(.top, 4)
             }
 
-            section(L("Project", "Projeto"), "info.circle") {
-                HStack(spacing: 8) {
-                    pill(L("Repository", "Repositório"), "chevron.left.forwardslash.chevron.right") { NSWorkspace.shared.open(Updater.repoURL) }
-                    pill(L("What's new", "Novidades"), "sparkles") { NSWorkspace.shared.open(Updater.repoURL.appendingPathComponent("releases")) }
-                    pill(L("Report a bug", "Reportar erro"), "ladybug") { NSWorkspace.shared.open(Updater.repoURL.appendingPathComponent("issues/new")) }
+            section(L("Project", "Projeto")) {
+                HStack(spacing: 18) {
+                    link(L("Repository", "Repositório")) { NSWorkspace.shared.open(Updater.repoURL) }
+                    link(L("Release notes", "Notas de versão")) { NSWorkspace.shared.open(Updater.repoURL.appendingPathComponent("releases")) }
+                    link(L("Report a bug", "Reportar erro")) { NSWorkspace.shared.open(Updater.repoURL.appendingPathComponent("issues/new")) }
                 }
             }
         }
@@ -113,44 +107,42 @@ struct SettingsView: View {
     }
 
     private var divider: some View {
-        Rectangle().fill(Theme.cardBorder).frame(height: 1)
+        Rectangle().fill(Theme.hairline).frame(height: 0.5)
     }
 
-    private func section<Content: View>(_ title: String, _ icon: String, @ViewBuilder _ content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label(title, systemImage: icon)
+    private func section<Content: View>(_ title: String, @ViewBuilder _ content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(Theme.accent)
-            VStack(alignment: .leading, spacing: 10, content: content).card(padding: 14)
+                .foregroundStyle(.secondary)
+                .padding(.leading, 4)
+            VStack(alignment: .leading, spacing: 10, content: content).group(padding: 12)
         }
+        .padding(.top, 6)
     }
 
     private func row(_ title: String, detail: String? = nil, get: @escaping () -> Bool, set: @escaping (Bool) -> Void) -> some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                if let detail { Text(detail).font(.system(size: 11)).foregroundStyle(Theme.secondary) }
+                if let detail { Text(detail).font(.system(size: 11)).foregroundStyle(.secondary) }
             }
             Spacer()
-            Toggle("", isOn: Binding(get: get, set: set)).labelsHidden().toggleStyle(BlueSwitch())
+            Toggle("", isOn: Binding(get: get, set: set)).softSwitch()
         }
     }
 
     private func labeledSwitch(_ title: String, get: @escaping () -> Bool, set: @escaping (Bool) -> Void) -> some View {
         HStack(spacing: 6) {
-            Text(title).font(.system(size: 12)).foregroundStyle(Theme.secondary)
-            Toggle("", isOn: Binding(get: get, set: set)).labelsHidden().toggleStyle(BlueSwitch())
+            Text(title).font(.system(size: 12)).foregroundStyle(.secondary)
+            Toggle("", isOn: Binding(get: get, set: set)).softSwitch()
         }
     }
 
-    private func pill(_ title: String, _ icon: String, filled: Bool = false, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Label(title, systemImage: icon)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(filled ? .white : Theme.accent)
-                .padding(.horizontal, 10).padding(.vertical, 6)
-                .background(filled ? Theme.accentFill : Theme.accent.opacity(0.12), in: Capsule())
-        }
-        .buttonStyle(.plain)
+    private func link(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(title, action: action)
+            .buttonStyle(.plain)
+            .font(.system(size: 12))
+            .foregroundStyle(Theme.accent)
     }
 }

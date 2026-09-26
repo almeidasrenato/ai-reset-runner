@@ -7,8 +7,15 @@ struct AIResetRunnerApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
 
     // The menu bar item and windows are AppKit (see AppDelegate); SwiftUI needs one scene.
+    // Its own "Settings…" command (⌘,) would open an empty window, so route it to ours.
     var body: some Scene {
         Settings { EmptyView() }
+            .commands {
+                CommandGroup(replacing: .appSettings) {
+                    Button(L("Settings…", "Configurações…")) { delegate.showSettings() }
+                        .keyboardShortcut(",")
+                }
+            }
     }
 }
 
@@ -27,7 +34,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panel.sizingOptions = .preferredContentSize
         popover.contentViewController = panel
         popover.behavior = .transient
-        popover.appearance = NSAppearance(named: .darkAqua)
 
         statusItem.button?.target = self
         statusItem.button?.action = #selector(togglePopover)
@@ -56,7 +62,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func showSettings() {
+    func showSettings() {
         popover.performClose(nil)
         if settingsWindow == nil {
             let view = SettingsView(store: store)
@@ -64,14 +70,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 .padding(.top, 34)
                 .padding(.bottom, 20)
                 .frame(width: 420)
-                .background(Theme.background)
                 .appStyle()
             let window = NSWindow(contentViewController: NSHostingController(rootView: LanguageKeyed(store: store) { view }))
             window.styleMask = [.titled, .closable, .fullSizeContentView]
             window.titlebarAppearsTransparent = true
             window.titleVisibility = .hidden
-            window.appearance = NSAppearance(named: .darkAqua)
-            window.backgroundColor = NSColor(Theme.background)
             window.isMovableByWindowBackground = true
             window.isReleasedWhenClosed = false
             window.center()

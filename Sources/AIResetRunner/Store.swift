@@ -153,12 +153,20 @@ final class Store {
             refreshAll()
         }
     }
+    /// Follow the system, or force light or dark for the whole app.
+    var appearance = Appearance(rawValue: UserDefaults.standard.string(forKey: "appearance") ?? "") ?? .system {
+        didSet {
+            UserDefaults.standard.set(appearance.rawValue, forKey: "appearance")
+            appearance.apply()
+        }
+    }
     /// Registered as a login item through SMAppService.
     var launchAtLogin = SMAppService.mainApp.status == .enabled
     var launchAtLoginError: String?
     private var timer: Timer?
 
     init() {
+        appearance.apply()
         if isAppBundle { UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in } }
         NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
@@ -222,4 +230,25 @@ func notify(_ title: String, _ body: String, kind: NotificationKind) {
     content.title = title
     content.body = body
     UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil))
+}
+
+enum Appearance: String, CaseIterable {
+    case system, light, dark
+
+    var label: String {
+        switch self {
+        case .system: return L("System", "Sistema")
+        case .light: return L("Light", "Claro")
+        case .dark: return L("Dark", "Escuro")
+        }
+    }
+
+    /// Windows and the popover inherit the app appearance.
+    func apply() {
+        NSApp?.appearance = switch self {
+        case .system: nil
+        case .light: NSAppearance(named: .aqua)
+        case .dark: NSAppearance(named: .darkAqua)
+        }
+    }
 }

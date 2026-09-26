@@ -57,6 +57,7 @@ cheapest model. The window starts right away, while you are away, and it resets 
 
 - Menu bar panel with the 5-hour session and weekly limits of **Claude Code** and **Codex**.
 - **Start now** button per provider. 45 seconds later the app reads the usage again to confirm that the window really opened.
+- **Appearance**: follow the system, or keep the app always light or always dark.
 - **Auto-start** per provider (off by default): starts a window by itself when none is active.
 - **Simulation mode**: auto-start only logs what it would do.
 - **Settings**:

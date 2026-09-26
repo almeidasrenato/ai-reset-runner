@@ -28,6 +28,17 @@ struct SettingsView: View {
                     .fixedSize()
                 }
                 divider
+                HStack {
+                    Text(L("Appearance", "Aparência"))
+                    Spacer()
+                    Picker("", selection: Binding(get: { store.appearance }, set: { store.appearance = $0 })) {
+                        ForEach(Appearance.allCases, id: \.self) { Text($0.label).tag($0) }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.segmented)
+                    .fixedSize()
+                }
+                divider
                 row(L("Open at login", "Abrir ao iniciar o Mac"), get: { store.launchAtLogin }, set: store.setLaunchAtLogin)
                 if let error = store.launchAtLoginError {
                     Text(error).font(.system(size: 11)).foregroundStyle(Theme.warning)

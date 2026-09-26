@@ -154,22 +154,3 @@ struct SettingsView: View {
         .buttonStyle(.plain)
     }
 }
-
-/// Dark title bar that blends into the content: title hidden, content runs under it.
-struct WindowChrome: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSView {
-        let view = NSView()
-        DispatchQueue.main.async {
-            guard let window = view.window else { return }
-            window.titlebarAppearsTransparent = true
-            window.titleVisibility = .hidden
-            window.styleMask.insert(.fullSizeContentView)
-            window.appearance = NSAppearance(named: .darkAqua)
-            window.backgroundColor = NSColor(Theme.background)
-            window.isMovableByWindowBackground = true
-        }
-        return view
-    }
-
-    func updateNSView(_ nsView: NSView, context: Context) {}
-}

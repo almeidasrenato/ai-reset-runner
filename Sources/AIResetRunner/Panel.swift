@@ -49,7 +49,7 @@ struct AppMark: View {
 
 struct Panel: View {
     let store: Store
-    @Environment(\.openSettings) private var openSettings
+    var openSettings: () -> Void = {}
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: store.providers.contains { $0.isPinging } ? 1 : 30)) { context in
@@ -80,10 +80,7 @@ struct Panel: View {
             IconButton(symbol: "arrow.clockwise", help: L("Check now", "Verificar agora")) { store.refreshAll() }
                 .rotationEffect(.degrees(loading ? 360 : 0))
                 .animation(loading ? .linear(duration: 1).repeatForever(autoreverses: false) : .default, value: loading)
-            IconButton(symbol: "gearshape", help: L("Settings", "Configurações")) {
-                NSApp.activate()
-                openSettings()
-            }
+            IconButton(symbol: "gearshape", help: L("Settings", "Configurações"), action: openSettings)
             .overlay(alignment: .topTrailing) {
                 if store.updater.available != nil { Circle().fill(Theme.accent).frame(width: 7, height: 7) }
             }

@@ -81,20 +81,32 @@ final class ProviderState {
         }
     }
 
-    /// Ping, then re-read usage after 45s to confirm a window actually opened.
+    /// Ping, then re-read usage until a window that started with this ping shows up.
+    /// The usage API lags: 45s after a good Claude ping it still showed the old window.
     func ping() async {
         guard !isPinging else { return }
         isPinging = true
         defer { isPinging = false }
-        lastFire = Date()
+        let sentAt = Date()
+        lastFire = sentAt
         do {
             let detail = try await pinger.ping()
             lastPing = PingResult(at: Date(), ok: true, detail: "\(detail), confirmando…")
-            confirmingUntil = Date().addingTimeInterval(45)
             defer { confirmingUntil = nil }
-            try? await Task.sleep(for: .seconds(45))
-            await refresh()
-            let opened = reading.map { !$0.session.isIdle() } ?? false
+            var opened = false
+            for wait in [45, 75, 120] {
+                confirmingUntil = Date().addingTimeInterval(TimeInterval(wait))
+                try? await Task.sleep(for: .seconds(wait))
+                await refresh()
+                // Only a fresh reading whose reset is ~5h after the ping; a failed
+                // refresh keeps the old reading, which must not count either way.
+                if let at = updatedAt, at > sentAt, let resetsAt = reading?.session.resetsAt,
+                   resetsAt > sentAt.addingTimeInterval(4 * 3600) {
+                    opened = true
+                    break
+                }
+            }
+            log.notice("\(self.name, privacy: .public) ping confirmed: \(opened)")
             lastPing = PingResult(at: Date(), ok: opened, detail: opened ? L("window opened", "janela aberta") : L("sent, but no window opened", "enviado, mas a janela não abriu"))
             notify("\(name): \(opened ? L("5h window opened", "janela de 5h aberta") : L("start had no effect", "disparo sem efeito"))", lastPing?.detail ?? "", kind: opened ? .success : .failure)
         } catch {

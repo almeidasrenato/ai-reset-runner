@@ -82,6 +82,10 @@ private let now = ISO8601DateFormatter().date(from: "2026-09-26T02:00:00Z")!
     let found = Shell.locate("claude", candidates: ["/nonexistent/claude", exe.path], loginShell: false)
     #expect(found?.path == exe.resolvingSymlinksInPath().path)
     #expect(Shell.locate("claude", candidates: ["/nonexistent/claude"], loginShell: false) == nil)
+    let broken = dir.appendingPathComponent("stale")
+    try Data("#!/bin/sh\nexec /nonexistent/codex \"$@\"\n".utf8).write(to: broken)
+    try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: broken.path)
+    #expect(Shell.locate("claude", candidates: [broken.path, exe.path], loginShell: false)?.path == exe.resolvingSymlinksInPath().path)
     #expect(Shell.locate("claude", override: exe.path)?.path == exe.path)
     #expect(Shell.locate("claude", override: "/nonexistent/claude") == nil)
 }

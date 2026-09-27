@@ -98,8 +98,12 @@ final class ProviderState {
             lastPing = PingResult(at: Date(), ok: opened, detail: opened ? L("window opened", "janela aberta") : L("sent, but no window opened", "enviado, mas a janela não abriu"))
             notify("\(name): \(opened ? L("5h window opened", "janela de 5h aberta") : L("start had no effect", "disparo sem efeito"))", lastPing?.detail ?? "", kind: opened ? .success : .failure)
         } catch {
+            // Rejected (e.g. pinged seconds before the server-side reset, or a broken
+            // binary): retry in 10 min instead of holding the 4h50 lock.
+            lastFire = Date().addingTimeInterval(10 * 60 - Scheduler.cooldown)
+            let repeated = lastPing?.ok == false && lastPing?.detail == error.localizedDescription
             lastPing = PingResult(at: Date(), ok: false, detail: error.localizedDescription)
-            notify(L("\(name): start failed", "\(name): falha no disparo"), error.localizedDescription, kind: .failure)
+            if !repeated { notify(L("\(name): start failed", "\(name): falha no disparo"), error.localizedDescription, kind: .failure) }
             log.error("\(self.name, privacy: .public) ping failed: \(error.localizedDescription, privacy: .public)")
         }
     }

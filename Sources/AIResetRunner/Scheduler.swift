@@ -11,13 +11,16 @@ enum Scheduler {
     static let cooldown: TimeInterval = 4 * 3600 + 50 * 60
     /// Decide only on a reading from this cycle, never on a stale cached one.
     static let maxReadingAge: TimeInterval = 5 * 60
+    /// The usage API can report the reset a minute or so before the server
+    /// accepts requests again ("resets 5:30am", pinged at 5:29).
+    static let resetGrace: TimeInterval = 3 * 60
 
     static func decide(reading: UsageReading?, readAt: Date?, lastFire: Date?, now: Date = Date()) -> Decision {
         guard let reading, let readAt, now.timeIntervalSince(readAt) <= maxReadingAge else {
             return .skip(L("no recent reading", "sem leitura recente"))
         }
         // Not "usage == 0": a window opened a minute ago also reads 0%.
-        guard reading.session.isIdle(now: now) else { return .skip(L("window active", "janela ativa")) }
+        guard reading.session.isIdle(now: now.addingTimeInterval(-resetGrace)) else { return .skip(L("window active", "janela ativa")) }
         if let weekly = reading.weekly, weekly.usedPercent >= 100 { return .skip(L("weekly limit reached", "limite semanal cheio")) }
         if let lastFire, now.timeIntervalSince(lastFire) < cooldown {
             let until = lastFire.addingTimeInterval(cooldown)

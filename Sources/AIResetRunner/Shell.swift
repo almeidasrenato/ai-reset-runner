@@ -16,7 +16,33 @@ enum Shell {
     /// credentials and does not match what the CLI user is logged into.
     static func candidates(for name: String, home: String = NSHomeDirectory()) -> [String] {
         ["\(home)/.local/bin", "\(home)/.claude/local", "/opt/homebrew/bin", "/usr/local/bin"]
-            .map { "\($0)/\(name)" }
+            .map { "\($0)/\(name)" } + bundled(name, home: home)
+    }
+
+    /// The ChatGPT app ships `codex` inside its bundle and moves it between
+    /// updates, so search by name instead of trusting a fixed path.
+    static func bundled(_ name: String, home: String = NSHomeDirectory()) -> [String] {
+        guard name == "codex" else { return [] }
+        return ["/Applications/ChatGPT.app", "/Applications/Codex.app", "\(home)/Applications/ChatGPT.app"].flatMap { app in
+            let files = FileManager.default.enumerator(atPath: "\(app)/Contents/Resources")
+            return (files?.allObjects as? [String] ?? [])
+                .filter { ($0 as NSString).lastPathComponent == name }
+                .map { "\(app)/Contents/Resources/\($0)" }
+        }
+    }
+
+    /// Catches wrappers left pointing at a path an app update removed.
+    static func runs(_ path: String) -> Bool {
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: path)
+        p.arguments = ["--version"]
+        p.standardOutput = FileHandle.nullDevice
+        p.standardError = FileHandle.nullDevice
+        p.standardInput = FileHandle.nullDevice
+        guard (try? p.run()) != nil else { return false }
+        DispatchQueue.global().asyncAfter(deadline: .now() + 10) { if p.isRunning { p.terminate() } }
+        p.waitUntilExit()
+        return p.terminationReason == .exit && p.terminationStatus == 0
     }
 
     static func locate(_ name: String, override: String? = nil, candidates: [String]? = nil,
@@ -25,7 +51,7 @@ enum Shell {
             let path = (override as NSString).expandingTildeInPath
             return fileManager.isExecutableFile(atPath: path) ? URL(fileURLWithPath: path) : nil
         }
-        for path in candidates ?? self.candidates(for: name) where fileManager.isExecutableFile(atPath: path) {
+        for path in candidates ?? self.candidates(for: name) where fileManager.isExecutableFile(atPath: path) && runs(path) {
             let resolved = URL(fileURLWithPath: path).resolvingSymlinksInPath()
             if !resolved.path.contains("/Library/Application Support/Claude/") { return resolved }
         }
@@ -41,7 +67,7 @@ enum Shell {
         p.waitUntilExit()
         let path = String(decoding: out.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        return path.hasPrefix("/") && fileManager.isExecutableFile(atPath: path) ? URL(fileURLWithPath: path) : nil
+        return path.hasPrefix("/") && fileManager.isExecutableFile(atPath: path) && runs(path) ? URL(fileURLWithPath: path) : nil
     }
 
     struct Result { let status: Int32; let out: String; let err: String; let timedOut: Bool }

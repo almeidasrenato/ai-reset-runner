@@ -16,8 +16,10 @@ private let idle = LimitWindow(usedPercent: 0, resetsAt: nil)
 }
 
 @Test func firesWhenWindowExpired() {
-    let expired = LimitWindow(usedPercent: 80, resetsAt: now.addingTimeInterval(-60))
+    let expired = LimitWindow(usedPercent: 80, resetsAt: now.addingTimeInterval(-Scheduler.resetGrace))
     #expect(Scheduler.decide(reading: reading(session: expired), readAt: now, lastFire: nil, now: now) == .fire)
+    let justReset = LimitWindow(usedPercent: 100, resetsAt: now.addingTimeInterval(-60))
+    #expect(Scheduler.decide(reading: reading(session: justReset), readAt: now, lastFire: nil, now: now) == .skip("window active"))
 }
 
 @Test func skipsFreshWindowAtZeroPercent() {

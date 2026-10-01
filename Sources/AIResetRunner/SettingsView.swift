@@ -5,8 +5,9 @@ struct SettingsView: View {
     let store: Store
     var version = Updater.current
 
+    /// Header stays put; the sections scroll under it.
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 12) {
                 Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 40, height: 40)
                 VStack(alignment: .leading, spacing: 1) {
@@ -14,8 +15,17 @@ struct SettingsView: View {
                     Text(L("AI ResetRunner · version \(version)", "AI ResetRunner · versão \(version)")).font(.system(size: 11)).foregroundStyle(.secondary)
                 }
             }
-            .padding(.bottom, 6)
+            .padding(EdgeInsets(top: 34, leading: 20, bottom: 12, trailing: 20))
+            Rectangle().fill(Theme.hairline).frame(height: 0.5)
+            ScrollView {
+                sections.padding(EdgeInsets(top: 6, leading: 20, bottom: 20, trailing: 20))
+            }
+        }
+        .font(.system(size: 13))
+    }
 
+    private var sections: some View {
+        VStack(alignment: .leading, spacing: 12) {
             section(L("General", "Geral")) {
                 HStack {
                     Text(L("Language", "Idioma"))
@@ -115,7 +125,6 @@ struct SettingsView: View {
                 }
             }
         }
-        .font(.system(size: 13))
     }
 
     /// Config dir of the second Claude account, plus the one-time login command.

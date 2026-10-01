@@ -74,12 +74,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func showSettings() {
         popover.performClose(nil)
         if settingsWindow == nil {
+            // Taller than small screens once every provider is on, so cap the height; SettingsView scrolls below its header.
+            let height = min(720, (NSScreen.main?.visibleFrame.height ?? 800) - 60)
             let view = SettingsView(store: store)
-                .padding(.horizontal, 20)
-                .padding(.top, 34)
-                .padding(.bottom, 20)
-                .frame(width: 420)
-                .appStyle()
+                .frame(width: 420, height: height)
+            .appStyle()
             let window = NSWindow(contentViewController: NSHostingController(rootView: LanguageKeyed(store: store) { view }))
             window.styleMask = [.titled, .closable, .fullSizeContentView]
             window.titlebarAppearsTransparent = true

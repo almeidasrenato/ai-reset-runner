@@ -46,6 +46,12 @@ private let idle = LimitWindow(usedPercent: 0, resetsAt: nil)
         == .skip("no recent reading"))
 }
 
+@Test func firesBlindFiveHoursAfterLastPing() {
+    #expect(Scheduler.decide(reading: nil, readAt: nil, lastFire: now.addingTimeInterval(-4 * 3600), now: now)
+        == .skip("no recent reading"))
+    #expect(Scheduler.decide(reading: nil, readAt: nil, lastFire: now.addingTimeInterval(-5.1 * 3600), now: now) == .fire)
+}
+
 @Test func versionCompare() {
     #expect(Updater.isNewer("0.2.0", than: "0.1.0"))
     #expect(Updater.isNewer("0.10.0", than: "0.9.1"))

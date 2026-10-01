@@ -17,6 +17,9 @@ enum Scheduler {
 
     static func decide(reading: UsageReading?, readAt: Date?, lastFire: Date?, now: Date = Date()) -> Decision {
         guard let reading, let readAt, now.timeIntervalSince(readAt) <= maxReadingAge else {
+            // Usage unreadable (e.g. the usage API answering 429 for hours): fall
+            // back on our own clock, the window our last ping opened is over.
+            if let lastFire, now.timeIntervalSince(lastFire) >= 5 * 3600 + resetGrace { return .fire }
             return .skip(L("no recent reading", "sem leitura recente"))
         }
         // Not "usage == 0": a window opened a minute ago also reads 0%.

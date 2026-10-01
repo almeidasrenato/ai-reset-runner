@@ -106,9 +106,14 @@ final class ProviderState {
                     break
                 }
             }
-            log.notice("\(self.name, privacy: .public) ping confirmed: \(opened)")
-            lastPing = PingResult(at: Date(), ok: opened, detail: opened ? L("window opened", "janela aberta") : L("sent, but no window opened", "enviado, mas a janela não abriu"))
-            notify("\(name): \(opened ? L("5h window opened", "janela de 5h aberta") : L("start had no effect", "disparo sem efeito"))", lastPing?.detail ?? "", kind: opened ? .success : .failure)
+            // No fresh reading at all: the ping went through, usage just can't confirm it.
+            let unconfirmed = !opened && (updatedAt ?? .distantPast) < sentAt
+            log.notice("\(self.name, privacy: .public) ping confirmed: \(opened) unreadable: \(unconfirmed)")
+            let ok = opened || unconfirmed
+            lastPing = PingResult(at: Date(), ok: ok, detail: opened ? L("window opened", "janela aberta")
+                : unconfirmed ? L("sent, usage unreadable to confirm", "enviado, uso ilegível para confirmar")
+                : L("sent, but no window opened", "enviado, mas a janela não abriu"))
+            notify("\(name): \(ok ? L("5h window opened", "janela de 5h aberta") : L("start had no effect", "disparo sem efeito"))", lastPing?.detail ?? "", kind: ok ? .success : .failure)
         } catch {
             // Rejected (e.g. pinged seconds before the server-side reset, or a broken
             // binary): retry in 10 min instead of holding the 4h50 lock.

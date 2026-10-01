@@ -63,6 +63,7 @@ struct SettingsView: View {
                         labeledSwitch(L("Show", "Mostrar"), get: { state.visible }, set: { state.visible = $0 })
                             .disabled(!state.enabled)
                     }
+                    if state === store.claude2 && state.enabled { secondAccount }
                 }
                 Text(L("Disabled: no reading, no starts. Hidden: keeps working, just not shown in the panel.", "Desativado não lê o uso nem dispara. Oculto continua funcionando, só não aparece no painel."))
                     .font(.system(size: 11)).foregroundStyle(.secondary)
@@ -115,6 +116,32 @@ struct SettingsView: View {
             }
         }
         .font(.system(size: 13))
+    }
+
+    /// Config dir of the second Claude account, plus the one-time login command.
+    private var secondAccount: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(L("Config folder", "Pasta de config")).font(.system(size: 12)).foregroundStyle(.secondary)
+                TextField(ClaudeAccount.defaultDir, text: Binding(get: { store.claude2Dir }, set: { store.claude2Dir = $0 }))
+                    .textFieldStyle(.roundedBorder)
+                    .font(.system(size: 12, design: .monospaced))
+                    .onSubmit { store.reschedule() }
+            }
+            Text(L("Another Claude account, e.g. work. Log in once in Terminal:", "Outra conta do Claude, ex.: da empresa. Faça login uma vez no Terminal:"))
+                .font(.system(size: 11)).foregroundStyle(.secondary)
+            HStack {
+                let _ = store.claude2Dir
+                Text(ClaudeAccount.loginCommand)
+                    .font(.system(size: 11, design: .monospaced))
+                    .textSelection(.enabled)
+                Spacer()
+                link(L("Copy", "Copiar")) {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(ClaudeAccount.loginCommand, forType: .string)
+                }
+            }
+        }
     }
 
     private var divider: some View {

@@ -12,10 +12,14 @@ let log = Logger(subsystem: "com.local.airesetrunner", category: "app")
 /// endpoint with the token read through `/usr/bin/security`, which is already
 /// on the item's access list, so no prompt either. Tokens are never logged.
 struct ClaudeProvider: UsageProvider {
-    let name = "Claude"
+    /// The second account reads through its own `CLAUDE_CONFIG_DIR`, CLI only:
+    /// its Keychain item has another name, so there is no OAuth fallback.
+    var second = false
+    var name: String { second ? ClaudeAccount.secondName : "Claude" }
     var binaryOverride: String? { UserDefaults.standard.string(forKey: "claudePath") }
 
     func fetch() async throws -> UsageReading {
+        if second { return try await fetchCLI() }
         do {
             return try await fetchCLI()
         } catch {
@@ -28,7 +32,13 @@ struct ClaudeProvider: UsageProvider {
         guard let exe = Shell.locate("claude", override: binaryOverride) else {
             throw UsageError.badResponse(L("claude binary not found", "binário claude não encontrado"))
         }
-        let result = try await Shell.run(exe, ["--print", "--no-session-persistence", "--strict-mcp-config", "/usage"], timeout: 30)
+        let result = try await Shell.run(exe, ["--print", "--no-session-persistence", "--strict-mcp-config", "/usage"],
+                                         env: try ClaudeAccount.env(second: second), timeout: 30)
+        // Logged out, `/usage` prints API cost totals instead of subscription limits.
+        if result.out.contains("Total cost:") && !result.out.contains("Current session") {
+            throw UsageError.needsAuth(second ? L("run: \(ClaudeAccount.loginCommand)", "rode: \(ClaudeAccount.loginCommand)")
+                                              : L("run: claude auth login", "rode: claude auth login"))
+        }
         let parsed = try ClaudeParser.parseCLI(result.out)
         return UsageReading(session: parsed.session, weekly: parsed.weekly, source: "claude /usage", raw: result.out)
     }
@@ -65,6 +75,31 @@ struct ClaudeProvider: UsageProvider {
             throw UsageError.needsAuth(L("Keychain token expired (run claude once)", "token do Keychain expirado (use o claude uma vez)"))
         }
         return stored.claudeAiOauth.accessToken
+    }
+}
+
+/// A second Claude login (e.g. a work account) kept in its own config dir,
+/// set up once with `CLAUDE_CONFIG_DIR=<dir> claude /login`.
+enum ClaudeAccount {
+    static let secondName = "Claude 2"
+    static let defaultDir = "~/.claude-2"
+
+    static var dirSetting: String {
+        get { UserDefaults.standard.string(forKey: "claude2ConfigDir") ?? defaultDir }
+        set { UserDefaults.standard.set(newValue, forKey: "claude2ConfigDir") }
+    }
+
+    /// Absolute: the CLI does not expand `~` in env vars.
+    static var dir: String { (dirSetting.trimmingCharacters(in: .whitespaces) as NSString).expandingTildeInPath }
+
+    static var loginCommand: String { "CLAUDE_CONFIG_DIR=\(dirSetting) claude auth login" }
+
+    static func env(second: Bool) throws -> [String: String] {
+        guard second else { return [:] }
+        guard FileManager.default.fileExists(atPath: dir) else {
+            throw UsageError.needsAuth(L("\(dir) not found, run: \(loginCommand)", "\(dir) não existe, rode: \(loginCommand)"))
+        }
+        return ["CLAUDE_CONFIG_DIR": dir]
     }
 }
 

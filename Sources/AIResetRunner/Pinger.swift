@@ -16,7 +16,8 @@ protocol Pinger: Sendable {
 }
 
 struct ClaudePinger: Pinger {
-    let name = "Claude"
+    var second = false
+    var name: String { second ? ClaudeAccount.secondName : "Claude" }
     var binaryOverride: String? { UserDefaults.standard.string(forKey: "claudePath") }
 
     func ping() async throws -> String {
@@ -29,24 +30,27 @@ struct ClaudePinger: Pinger {
             "-p", "ok", "--model", "haiku", "--output-format", "json",
             "--no-session-persistence", "--strict-mcp-config", "--setting-sources", "project",
             "--disable-slash-commands", "--tools", "",
-        ], timeout: 60)
+        ], env: try ClaudeAccount.env(second: second), timeout: 60)
         log.info("claude ping exit \(result.status) stdout: \(result.out.prefix(400), privacy: .public) stderr: \(result.err.prefix(400), privacy: .public)")
         if result.timedOut { throw UsageError.badResponse(L("timed out after 60s", "timeout de 60s")) }
 
         struct Output: Decodable { let session_id: String?; let is_error: Bool?; let result: String? }
         let output = try? JSONDecoder().decode(Output.self, from: Data(result.out.utf8))
-        if let id = output?.session_id { Self.deleteTranscript(sessionID: id) }
+        if let id = output?.session_id {
+            Self.deleteTranscript(sessionID: id, configDir: second ? ClaudeAccount.dir : nil)
+        }
         guard result.status == 0, output?.is_error == false else {
             throw UsageError.badResponse(output?.result ?? String((result.err.isEmpty ? result.out : result.err).prefix(200)))
         }
         return L("haiku replied", "haiku respondeu")
     }
 
-    /// `~/.claude/projects/<workdir with non-alphanumerics as '-'>/<id>.jsonl`.
-    static func deleteTranscript(sessionID: String, home: String = NSHomeDirectory()) {
+    /// `<config dir, ~/.claude by default>/projects/<workdir with non-alphanumerics as '-'>/<id>.jsonl`.
+    static func deleteTranscript(sessionID: String, configDir: String? = nil, home: String = NSHomeDirectory()) {
         guard UUID(uuidString: sessionID) != nil else { return }
         let folder = String(Shell.workdir.path.map { $0.isLetter || $0.isNumber ? $0 : "-" })
-        let file = URL(fileURLWithPath: home).appendingPathComponent(".claude/projects/\(folder)/\(sessionID).jsonl")
+        let root = configDir.map { URL(fileURLWithPath: $0) } ?? URL(fileURLWithPath: home).appendingPathComponent(".claude")
+        let file = root.appendingPathComponent("projects/\(folder)/\(sessionID).jsonl")
         if (try? FileManager.default.removeItem(at: file)) != nil {
             log.notice("deleted claude transcript \(file.lastPathComponent, privacy: .public)")
         }

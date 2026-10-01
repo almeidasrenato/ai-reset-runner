@@ -73,7 +73,7 @@ enum Shell {
     struct Result { let status: Int32; let out: String; let err: String; let timedOut: Bool }
 
     /// Runs `exe` in `workdir`, killing it after `timeout`.
-    static func run(_ exe: URL, _ args: [String], timeout: TimeInterval) async throws -> Result {
+    static func run(_ exe: URL, _ args: [String], env extra: [String: String] = [:], timeout: TimeInterval) async throws -> Result {
         try await Task.detached {
             let p = Process()
             p.executableURL = exe
@@ -83,6 +83,7 @@ enum Shell {
             // Its own dir first so an nvm-installed CLI finds its `node`.
             env["PATH"] = ([exe.deletingLastPathComponent().path] + ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin"])
                 .joined(separator: ":")
+            env.merge(extra) { $1 }
             p.environment = env
             let out = Pipe(), err = Pipe()
             p.standardOutput = out

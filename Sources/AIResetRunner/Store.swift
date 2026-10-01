@@ -43,14 +43,14 @@ final class ProviderState {
 
     var name: String { provider.name }
 
-    init(_ provider: any UsageProvider, pinger: any Pinger) {
+    init(_ provider: any UsageProvider, pinger: any Pinger, enabledByDefault: Bool = true) {
         self.provider = provider
         self.pinger = pinger
         lastPing = (UserDefaults.standard.data(forKey: "lastPing.\(provider.name)"))
             .flatMap { try? JSONDecoder().decode(PingResult.self, from: $0) }
         autoEnabled = UserDefaults.standard.bool(forKey: "auto.\(provider.name)")
         lastFire = UserDefaults.standard.object(forKey: "lastFire.\(provider.name)") as? Date
-        enabled = UserDefaults.standard.object(forKey: "enabled.\(provider.name)") as? Bool ?? true
+        enabled = UserDefaults.standard.object(forKey: "enabled.\(provider.name)") as? Bool ?? enabledByDefault
         visible = UserDefaults.standard.object(forKey: "visible.\(provider.name)") as? Bool ?? true
     }
 
@@ -150,8 +150,14 @@ func backoff(attempt: Int, retryAfter: TimeInterval?) -> TimeInterval {
 @MainActor @Observable
 final class Store {
     let claude = ProviderState(ClaudeProvider(), pinger: ClaudePinger())
+    /// Opt-in second Claude account (its own CLAUDE_CONFIG_DIR).
+    let claude2 = ProviderState(ClaudeProvider(second: true), pinger: ClaudePinger(second: true), enabledByDefault: false)
     let codex = ProviderState(CodexProvider(), pinger: CodexPinger())
-    var providers: [ProviderState] { [claude, codex] }
+    var providers: [ProviderState] { [claude, claude2, codex] }
+    /// Mirrors `ClaudeAccount.dirSetting` so the settings text redraws.
+    var claude2Dir = ClaudeAccount.dirSetting {
+        didSet { ClaudeAccount.dirSetting = claude2Dir }
+    }
     var shown: [ProviderState] { providers.filter { $0.enabled && $0.visible } }
     let updater = Updater()
     /// Mirrors `NotificationKind.isOn` so the settings toggles redraw.

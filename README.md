@@ -59,6 +59,7 @@ cheapest model. The window starts right away, while you are away, and it resets 
 - **Start now** button per provider. 45 seconds later the app reads the usage again to confirm that the window really opened.
 - **Appearance**: follow the system, or keep the app always light or always dark.
 - **Auto-start** per provider (off by default): starts a window by itself when none is active.
+- **Second Claude account** (off by default), e.g. a work account next to a personal one. See [Two Claude accounts](#two-claude-accounts).
 - **Simulation mode**: auto-start only logs what it would do.
 - **Settings**:
   - language (English or Portuguese);
@@ -137,6 +138,18 @@ make logs     # stream the app's logs
 make icon     # regenerate the app icon
 make release  # after bumping VERSION: build, zip and publish a GitHub release
 ```
+
+### Two Claude accounts
+
+The app can track a second Claude login, with its own usage, Start now button and Auto-start. It lives in its own Claude Code config folder, so your normal `claude` login is untouched.
+
+1. Sign in once with the other account (close other Claude apps while the browser login runs):
+
+   ```bash
+   CLAUDE_CONFIG_DIR=~/.claude-2 claude auth login
+   ```
+
+2. In **Settings › Providers**, turn on **Claude 2**. Change the config folder there if you used another one.
 
 ### Advanced settings
 

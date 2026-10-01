@@ -89,3 +89,13 @@ private let now = ISO8601DateFormatter().date(from: "2026-09-26T02:00:00Z")!
     #expect(Shell.locate("claude", override: exe.path)?.path == exe.path)
     #expect(Shell.locate("claude", override: "/nonexistent/claude") == nil)
 }
+
+@Test func secondClaudeAccountEnv() throws {
+    #expect(try ClaudeAccount.env(second: false).isEmpty)
+    let saved = UserDefaults.standard.string(forKey: "claude2ConfigDir")
+    defer { UserDefaults.standard.set(saved, forKey: "claude2ConfigDir") }
+    ClaudeAccount.dirSetting = NSTemporaryDirectory()
+    #expect(try ClaudeAccount.env(second: true)["CLAUDE_CONFIG_DIR"]?.hasPrefix("/") == true)
+    ClaudeAccount.dirSetting = "~/no-such-claude-dir-\(UUID())"
+    #expect(throws: UsageError.self) { try ClaudeAccount.env(second: true) }
+}

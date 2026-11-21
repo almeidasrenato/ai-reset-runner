@@ -99,3 +99,16 @@ private let now = ISO8601DateFormatter().date(from: "2026-09-26T02:00:00Z")!
     ClaudeAccount.dirSetting = "~/no-such-claude-dir-\(UUID())"
     #expect(throws: UsageError.self) { try ClaudeAccount.env(second: true) }
 }
+
+/// Many runs at once, more than the cooperative pool has threads, must all finish.
+@Test func shellRunManyConcurrentAndTimeout() async throws {
+    let sh = URL(fileURLWithPath: "/bin/sh")
+    let results = await withTaskGroup(of: Shell.Result?.self) { group in
+        for i in 0..<40 { group.addTask { try? await Shell.run(sh, ["-c", "echo \(i); echo e >&2"], timeout: 10) } }
+        return await group.reduce(into: []) { $0.append($1) }
+    }
+    #expect(results.count == 40)
+    #expect(results.allSatisfy { $0?.status == 0 && $0?.err == "e\n" })
+    let slow = try await Shell.run(sh, ["-c", "sleep 5"], timeout: 0.5)
+    #expect(slow.timedOut)
+}

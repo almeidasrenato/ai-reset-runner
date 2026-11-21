@@ -39,9 +39,14 @@ enum Shell {
         p.standardOutput = FileHandle.nullDevice
         p.standardError = FileHandle.nullDevice
         p.standardInput = FileHandle.nullDevice
+        // terminationHandler, not waitUntilExit: that one can miss the exit and hang forever.
+        let done = DispatchSemaphore(value: 0)
+        p.terminationHandler = { _ in done.signal() }
         guard (try? p.run()) != nil else { return false }
-        DispatchQueue.global().asyncAfter(deadline: .now() + 10) { if p.isRunning { p.terminate() } }
-        p.waitUntilExit()
+        if done.wait(timeout: .now() + 10) == .timedOut {
+            p.terminate()
+            return false
+        }
         return p.terminationReason == .exit && p.terminationStatus == 0
     }
 
@@ -73,38 +78,50 @@ enum Shell {
     struct Result { let status: Int32; let out: String; let err: String; let timedOut: Bool }
 
     /// Runs `exe` in `workdir`, killing it after `timeout`.
+    /// Never blocks a Swift concurrency thread: `waitUntilExit` there hung forever
+    /// (11 stuck threads starved the pool, so no tick ran and nothing fired).
     static func run(_ exe: URL, _ args: [String], env extra: [String: String] = [:], timeout: TimeInterval) async throws -> Result {
-        try await Task.detached {
-            let p = Process()
-            p.executableURL = exe
-            p.arguments = args
-            p.currentDirectoryURL = workdir
-            var env = ProcessInfo.processInfo.environment
-            // Its own dir first so an nvm-installed CLI finds its `node`.
-            env["PATH"] = ([exe.deletingLastPathComponent().path] + ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin"])
-                .joined(separator: ":")
-            env.merge(extra) { $1 }
-            p.environment = env
-            let out = Pipe(), err = Pipe()
-            p.standardOutput = out
-            p.standardError = err
-            p.standardInput = FileHandle.nullDevice
-            try p.run()
+        let p = Process()
+        p.executableURL = exe
+        p.arguments = args
+        p.currentDirectoryURL = workdir
+        var env = ProcessInfo.processInfo.environment
+        // Its own dir first so an nvm-installed CLI finds its `node`.
+        env["PATH"] = ([exe.deletingLastPathComponent().path] + ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin"])
+            .joined(separator: ":")
+        env.merge(extra) { $1 }
+        p.environment = env
+        let out = Pipe(), err = Pipe()
+        p.standardOutput = out
+        p.standardError = err
+        p.standardInput = FileHandle.nullDevice
 
-            let timedOut = Flag()
-            let killer = DispatchWorkItem { if p.isRunning { timedOut.set(); p.terminate() } }
-            DispatchQueue.global().asyncAfter(deadline: .now() + timeout, execute: killer)
-            // Drain both pipes concurrently so a chatty process cannot block on a full pipe.
-            async let o = Task.detached { out.fileHandleForReading.readDataToEndOfFile() }.value
-            async let e = Task.detached { err.fileHandleForReading.readDataToEndOfFile() }.value
-            let (od, ed) = await (o, e)
-            p.waitUntilExit()
-            killer.cancel()
-            return Result(status: p.terminationStatus, out: String(decoding: od, as: UTF8.self),
-                          err: String(decoding: ed, as: UTF8.self), timedOut: timedOut.value)
-        }.value
+        let group = DispatchGroup()
+        group.enter()
+        p.terminationHandler = { _ in group.leave() }
+        try p.run()
+
+        let timedOut = Flag()
+        let killer = DispatchWorkItem { if p.isRunning { timedOut.set(); p.terminate() } }
+        DispatchQueue.global().asyncAfter(deadline: .now() + timeout, execute: killer)
+        // Drain both pipes on GCD threads so a chatty process cannot block on a full pipe.
+        let od = Box(), ed = Box()
+        for (pipe, box) in [(out, od), (err, ed)] {
+            group.enter()
+            DispatchQueue.global().async { box.data = pipe.fileHandleForReading.readDataToEndOfFile(); group.leave() }
+        }
+        return await withCheckedContinuation { cont in
+            group.notify(queue: .global()) {
+                killer.cancel()
+                cont.resume(returning: Result(status: p.terminationStatus, out: String(decoding: od.data, as: UTF8.self),
+                                              err: String(decoding: ed.data, as: UTF8.self), timedOut: timedOut.value))
+            }
+        }
     }
 }
+
+/// Written by one reader thread, read after the group finishes.
+private final class Box: @unchecked Sendable { var data = Data() }
 
 private final class Flag: @unchecked Sendable {
     private let lock = NSLock()
